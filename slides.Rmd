@@ -1,0 +1,159 @@
+---
+title: "Spherical Geometry"
+author: "Edzer Pebesma, Dewey Dunnington"
+date: "GI Forum, Nov 10, 2020"
+output: ioslides_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## What is spherical geometry?
+
+Earth-related coordinates of spatial data can be either
+
+- _projected_: measured on a two-dimensional surface, which is associated with a projection from the Earth's **surface**
+- _geocentric_: x-, y-, and z-coordinates associated with the three principal directions, measured from Earth's **center**
+- _geographic_: degrees latitude and longitude, associated with a datum (ellipsoidal or even spherical model of the Earth)
+
+Geometrical computations on projected or geocentric coordinates can be done using Euclidean geometry, where all lines are staight.
+
+Spherical (or ellipsoidal) geometry computes distances, direction, areas etc. over the surface of the sphere (ellipsoid).
+
+## Why is this worth talking about?
+
+- I believe that applying Eucledian geometry to geographical coordinates is the number one most common error made in spatial data science (closely followed by ignoring the support of data).
+
+- technological advances have made spherical geometry a good option, but inertia in legacy GIS and data science languages have slowed down its adoption / uptake
+
+- We have gotten used to Plate Carree, and are OK with it.
+
+- Even GeoJSON has written down that the world is 2D.
+
+------------
+
+<img src="map_projections.png" alt="drawing" width="600"/> https://xkcd.com/977/
+
+------------
+
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Equirectangular_projection_SW.jpg/585px-Equirectangular_projection_SW.jpg" width=800/>
+https://en.wikipedia.org/wiki/Equirectangular_projection
+
+## What is (so bad about) Plate Carrée?
+
+Compared to other projections:
+
+* every global projection is miserable in its own way
+* it has true scale (1 unit easting equals 1 unit Northing) only at the equator
+* it is hopeless at the poles and at the antimeridian
+
+Compared to an ellipsoid, or sphere:
+
+* It is 2D. The world is round, bro.
+
+-----------
+
+Consider, for a moment, the difference between:
+
+* a flat projection of the sphere, and a sphere (1, 2)
+* a sphere and an ellipsoid with 1/300 flattening (2, 3)
+
+<img src="scratch/flat.png" alt="drawing" width="350"/> 
+<img src="scratch/animation.gif" alt="drawing" width="200"/> 
+<img src="scratch/animation.gif" alt="drawing" width="200"/> 
+
+--------------
+
+**Equirectangular projection**: where meridians and parallels form equal rectangles (left; true scale at centre), not squares (right: nowhere true)
+
+```{r world, echo=FALSE, fig.height=6}
+suppressPackageStartupMessages(library(sf))
+suppressPackageStartupMessages(library(sp))
+data(air, package = "spacetime")
+DE <- st_as_sf(DE_NUTS1)
+par(mfrow=c(1, 2))
+plot(st_geometry(DE), graticule=TRUE,axes=TRUE, main="equirectangular")
+plot(st_geometry(DE), graticule=TRUE,axes=TRUE,asp=1,main="plate carree")
+```
+
+------
+
+<img src="scratch/qgis.png" alt="drawing" width=800/> 
+
+## Prior work
+
+* GeographicLib (C.F.F. Karney), "_[...] a small set of C++ classes for [...] solving geodesic problems._" 
+    * https://geographiclib.sourceforge.io/ 
+	* exact up to 8-byte doubles
+	* part of Proj.4, now PROJ
+* PostGIS (liblwgeom)'s "geograpy" type
+    * [funded by palantir](http://blog.cleverelephant.ca/2017/12/postgis-fund-me.html)
+	* [feature list](https://postgis.net/workshops/postgis-intro/geography.html), 
+	* but:  "_The buffer and intersection functions are actually wrappers on top of a cast to geometry, and are not carried out natively in spherical coordinates. As a result, they may fail to return correct results for objects with very large extents that cannot be cleanly converted to a planar representation._"
+* R package `geosphere` providing distance, bearing, etc, and several alternative measures
+* R packages `sp`, `gstat`, `spdep` using geodetic distances in case of geographic coordinates
+* R package `lwgeom` interfacing `liblwgeom`
+
+## How is spherical geometry different?
+
+* in contrast to the plane $R^2$, the sphere ($S^2$) is bounded
+* where in $R^2$ polygons have an unambiguous _inside_, on $S^2$ polygons divide the sphere's surface in two parts.
+* the _inside_ can then e.g. be determined by ring direction (left of the boundary, when traversing the ring), and flips if the ring directions is reversed
+* the _empty polygon_ has a complement: the _full polygon_.
+* two new bounding structures:
+    * bounding cap: smalles circumfering circle (center point + radius)
+	* bounding rectangle: lat/lng range that might cross the antimeridian
+
+## Plotting virtual globes
+
+* Google Earth
+* Google Maps: now has "enable/disable globe view" switches between _azimuthal perspective_
+and _Web Mercator_.
+* Cesium (can switch between WM, perspective and orthographic)
+
+## Analysing data with geographic coordinates
+
+### Measures
+`distance`, `area`, `direction`, ..., bounding box, bounding cap
+
+### Predicates
+`intersects`, `overlaps`, `covers`, `touches`, `is_within_distance`, ...
+
+### Transformations
+`intersection`, `union`, `difference`, `sym_difference`, `buffer`
+
+
+## How do we do this? Welcome [s2geometry](https://s2geometry.io)
+
+* an open source library written and supported by Google, powering
+    * Google maps, earth, earth engine
+	* Google's serverless SQL engine [bigquery GIS](https://cloud.google.com/bigquery/docs/gis-intro) 
+* provides all the measures, predicates, transformations
+* allows several snapping to grid options, preserving validity
+* provides, and uses, a spatial index by using a [space-filling hilbert curve](https://s2geometry.io/devguide/s2cell_hierarchy.html), after projecting a sphere onto six cube-faces of an [earth-cube](https://s2geometry.io/resources/earthcube)
+
+-------------
+
+<img src="s2curve-small.gif" alt="drawing"/> 
+https://s2geometry.io/devguide/s2cell_hierarchy.html
+
+## Examples
+
+## Migrating sf to default to s2: challenges
+
+## Outlook
+
+-------------
+### References
+
+* Karney, Charles F.F. 2013. “Algorithms for
+Geodesics.” Journal of Geodesy 87 (1). Springer: 43–55.
+https://link.springer.com/content/pdf/10.1007/s00190-012-0578-z.pdf.
+
+* R. Hijmans, 2020, Introduction to
+the geosphere package; CRAN package vignette,
+https://cran.r-project.org/web/packages/geosphere/vignettes/geosphere.pdf
+
+* E Pebesma, D Dunnington, Spherical geometry in sf using s2geometry,
+https://r-spatial.github.io/sf/articles/sf7.html

@@ -1,0 +1,10 @@
+# see https://gist.github.com/edzer/9c5c24434ffcaf42917796a98c4dd9a6
+library(sf)
+data(wrld_simpl, package = "maptools")
+w <- st_as_sf(wrld_simpl)
+w = st_make_valid(w)
+st_crs(w) = st_crs(4326)
+set.seed(131)
+w$f = factor(sample(1:12, nrow(w), replace = TRUE))
+png("flat.png", 600, 350)
+plot(w["f"], axes = TRUE, graticule = TRUE, key.pos = NULL, main = NULL)
