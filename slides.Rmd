@@ -1,13 +1,22 @@
 ---
 title: "Spherical Geometry"
-author: "Edzer Pebesma, Dewey Dunnington"
+author: "Edzer Pebesma"
 date: "GI Forum, Nov 10, 2020"
-output: ioslides_presentation
+output:
+  ioslides_presentation:
+    widescreen: true
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+
+--------
+
+
+<img src="anomaly.jpeg" alt="drawing" width="700"/>
+https://twitter.com/mikarantane/status/1324286992071446529
+
 
 ## What is spherical geometry?
 
@@ -45,7 +54,7 @@ https://en.wikipedia.org/wiki/Equirectangular_projection
 Compared to other projections:
 
 * every global projection is miserable in its own way
-* it has true scale (1 unit easting equals 1 unit Northing) only at the equator
+* it preserves shape (1 unit easting equals 1 unit Northing) only at the equator
 * it is hopeless at the poles and at the antimeridian
 
 Compared to an ellipsoid, or sphere:
@@ -65,7 +74,7 @@ Consider, for a moment, the difference between:
 
 --------------
 
-**Equirectangular projection**: where meridians and parallels form equal rectangles (left; true scale at centre), not squares (right: nowhere true)
+**Equirectangular projection**: where meridians and parallels form equal rectangles (left; shape preserving at center), not squares (right: nowhere true)
 
 ```{r world, echo=FALSE, fig.height=6}
 suppressPackageStartupMessages(library(sf))
@@ -85,21 +94,80 @@ plot(st_geometry(DE), graticule=TRUE,axes=TRUE,asp=1,main="plate carree")
 
 * GeographicLib (C.F.F. Karney), "_[...] a small set of C++ classes for [...] solving geodesic problems._" 
     * https://geographiclib.sourceforge.io/ 
-	* exact up to 8-byte doubles
+	* ellipsoidal, Taylor expansions exact up to 8-byte doubles
 	* part of Proj.4, now PROJ
 * PostGIS (liblwgeom)'s "geograpy" type
     * [funded by palantir](http://blog.cleverelephant.ca/2017/12/postgis-fund-me.html)
 	* [feature list](https://postgis.net/workshops/postgis-intro/geography.html), 
 	* but:  "_The buffer and intersection functions are actually wrappers on top of a cast to geometry, and are not carried out natively in spherical coordinates. As a result, they may fail to return correct results for objects with very large extents that cannot be cleanly converted to a planar representation._"
+
+--------
+
+* Google's s2geometry
+* H3: Uber’s Hexagonal Hierarchical Spatial Index
+
 * R package `geosphere` providing distance, bearing, etc, and several alternative measures
 * R packages `sp`, `gstat`, `spdep` using geodetic distances in case of geographic coordinates
-* R package `lwgeom` interfacing `liblwgeom`
+* R package `lwgeom` interfacing parts of `liblwgeom`
+
+## The situation with `sf` and `stars`
+
+```{r echo=FALSE}
+suppressPackageStartupMessages(library(units))
+```
+
+```{r}
+st_as_sfc("POLYGON((0 0,1 0,1 1,0 1,0 0))") %>% 
+	st_area()
+st_as_sfc("POLYGON((0 0,1 0,1 1,0 1,0 0))", crs = "EPSG:4326") %>% 
+	st_area() %>%
+	set_units(km^2)
+```
+
+$\Rightarrow$ measures are computed over the sphere/ellipsoid
+
+-------
+
+```{r}
+a <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
+	st_buffer(set_units(1, degree)) %>%
+	st_transform("EPSG:25832") # UTM zone 32 N
+b <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
+	st_transform("EPSG:25832") %>% # UTM zone 32 N
+	st_buffer(set_units(111, km))
+```
+
+$\Rightarrow$ wrong computations raise a warning
+
+----------
+
+```{r echo=FALSE,fig.width=10,fig.height=6}
+par(mfrow = c(1, 2))
+DE_UTM = st_transform(DE, "EPSG:25832")
+plot(st_geometry(DE_UTM), graticule=TRUE, main = "a: wrong buffer in LNG/LAT")
+plot(a, col = 'orange', add = TRUE)
+plot(st_geometry(DE_UTM), graticule=TRUE, main = "b: correct buffer in UTM")
+plot(b, col = 'orange', add = TRUE)
+```
+
+$\Rightarrow$ proper buffering needs round-trip through a projection
+
+--------
+
+```{r}
+st_as_sfc("POINT(0 89)", crs = "EPSG:4326") %>% 
+	st_buffer(set_units(5, degree)) %>%
+	st_bbox()
+```
+
+$\Rightarrow$ nonsense coordinates may come out
+
 
 ## How is spherical geometry different?
 
 * in contrast to the plane $R^2$, the sphere ($S^2$) is bounded
 * where in $R^2$ polygons have an unambiguous _inside_, on $S^2$ polygons divide the sphere's surface in two parts.
-* the _inside_ can then e.g. be determined by ring direction (left of the boundary, when traversing the ring), and flips if the ring directions is reversed
+* the _inside_ can then e.g. be associated with ring direction (e.g. left of the boundary, when traversing the ring, is inside), and flips if the ring directions are reversed
 * the _empty polygon_ has a complement: the _full polygon_.
 * two new bounding structures:
     * bounding cap: smalles circumfering circle (center point + radius)
@@ -110,7 +178,7 @@ plot(st_geometry(DE), graticule=TRUE,axes=TRUE,asp=1,main="plate carree")
 * Google Earth
 * Google Maps: now has "enable/disable globe view" switches between _azimuthal perspective_
 and _Web Mercator_.
-* Cesium (can switch between WM, perspective and orthographic)
+* Cesium (can switch between Web Mercator, perspective and orthographic)
 
 ## Analysing data with geographic coordinates
 
@@ -127,11 +195,11 @@ and _Web Mercator_.
 ## How do we do this? Welcome [s2geometry](https://s2geometry.io)
 
 * an open source library written and supported by Google, powering
-    * Google maps, earth, earth engine
+    * Google Maps, Earth, Earth Engine
 	* Google's serverless SQL engine [bigquery GIS](https://cloud.google.com/bigquery/docs/gis-intro) 
 * provides all the measures, predicates, transformations
 * allows several snapping to grid options, preserving validity
-* provides, and uses, a spatial index by using a [space-filling hilbert curve](https://s2geometry.io/devguide/s2cell_hierarchy.html), after projecting a sphere onto six cube-faces of an [earth-cube](https://s2geometry.io/resources/earthcube)
+* provides, and uses, for spatial index a [space-filling hilbert curve](https://s2geometry.io/devguide/s2cell_hierarchy.html), after projecting a sphere onto six cube-faces of an [earth-cube](https://s2geometry.io/resources/earthcube)
 
 -------------
 
@@ -140,15 +208,52 @@ https://s2geometry.io/devguide/s2cell_hierarchy.html
 
 ## Examples
 
-## Migrating sf to default to s2: challenges
+```{r}
+sf_use_s2(TRUE)
+a <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
+	st_buffer(set_units(1, degree)) %>%
+	st_transform("EPSG:25832") # UTM zone 32 N
+b <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
+	st_buffer(set_units(1, degree), max_cells = 300) %>%
+	st_transform("EPSG:25832") # UTM zone 32 N
+c <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
+	st_buffer(set_units(1, degree), max_cells = 100) %>%
+	st_transform("EPSG:25832") # UTM zone 32 N
+```
+
+$\Rightarrow$ no longer raise a warning
+
+----------
+
+
+```{r echo=FALSE,fig.width=10,fig.height=4}
+par(mfrow = c(1, 3))
+DE_UTM = st_transform(DE, "EPSG:25832")
+plot(st_geometry(DE_UTM), graticule=TRUE, main = "buffer in LNG/LAT, 1000 cells")
+plot(a, col = 'orange', add = TRUE)
+plot(st_geometry(DE_UTM), graticule=TRUE, main = "buffer in LNG/LAT, 400 cells")
+plot(b, col = 'orange', add = TRUE)
+plot(st_geometry(DE_UTM), graticule=TRUE, main = "buffer in LNG/LAT, 100 cells")
+plot(c, col = 'orange', add = TRUE)
+```
+
+## Migrating sf to _default_ to s2: challenges
+
+* $\Rightarrow$ for complex shapes, what is a good default value for `max_cells`?
+* $\Rightarrow$ when are buffers needed, when is `st_is_within_distance` enough?
+* `st_is_within_distance` in `s2` is fast (indexed), but slow in `lwgeom`...
 
 ## Outlook
+
+* run reverse dependency checks on all (300) reverse dependencies
+* document best practices (`st_is_within_distance` rather than `st_buffer`)
+* explain the issue: the world is round.
 
 -------------
 ### References
 
-* Karney, Charles F.F. 2013. “Algorithms for
-Geodesics.” Journal of Geodesy 87 (1). Springer: 43–55.
+* Karney, Charles F.F. 2013. "Algorithms for
+Geodesics." Journal of Geodesy 87 (1). Springer: 43–55.
 https://link.springer.com/content/pdf/10.1007/s00190-012-0578-z.pdf.
 
 * R. Hijmans, 2020, Introduction to
