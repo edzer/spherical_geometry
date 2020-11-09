@@ -2,6 +2,7 @@
 title: "Spherical Geometry"
 author: "Edzer Pebesma"
 date: "GI Forum, Nov 10, 2020"
+logo: "scratch/animation.gif"
 output:
   ioslides_presentation:
     widescreen: true
@@ -18,27 +19,167 @@ knitr::opts_chunk$set(echo = TRUE)
 https://twitter.com/mikarantane/status/1324286992071446529
 
 
-## What is spherical geometry?
+--------
 
+```{r echo=FALSE,fig.width=10}
+suppressPackageStartupMessages(library(sf))
+library(rnaturalearth)
+co = ne_countries(returnclass = "sf")
+plot(co["name_sort"], axes = TRUE, graticule = TRUE, col_graticule = 'orange', 
+  main="Natural Earth countries 1:110, WGS 84 plotted as Plate Carree")
+```
+
+--------
+
+
+```{r echo=FALSE,fig.width=10}
+par(mfrow = c(1, 2))
+fi = co[co$name_sort == "Fiji",] %>% 
+	st_geometry() %>% 
+	st_transform('EPSG:3143')
+plot(fi[1], graticule=TRUE, axes=TRUE, col_graticule='orange', 
+  main = 'Fiji 1986 / Fiji Map Grid')
+a = co[co$name_sort == "Antarctica",] %>% 
+	st_geometry() %>% 
+	st_transform('EPSG:3031')
+plot(a[1], graticule=TRUE, axes=TRUE, col_graticule='orange', 
+  main = 'Antarctic Polar Stereographic')
+```
+
+## What is spherical geometry?
 Earth-related coordinates of spatial data can be either
 
 - _projected_: measured on a two-dimensional surface, which is associated with a projection from the Earth's **surface**
 - _geocentric_: x-, y-, and z-coordinates associated with the three principal directions, measured from Earth's **center**
 - _geographic_: degrees latitude and longitude, associated with a datum (ellipsoidal or even spherical model of the Earth)
 
-Geometrical computations on projected or geocentric coordinates can be done using Euclidean geometry, where all lines are staight.
+------
 
-Spherical (or ellipsoidal) geometry computes distances, direction, areas etc. over the surface of the sphere (ellipsoid).
+```{r echo=FALSE,fig.width=10}
+e = cbind(-90:90,0) # equator
+f1 = rbind(cbind(0, -90:90)) # 0/antimerid.
+f2 = rbind(cbind(90, -90:90), cbind(270, 90:-90))# +/- 90
+eq = st_sfc(st_linestring(e), st_linestring(f1), st_linestring(f2), crs=4326)
+
+geoc = st_transform(eq, "+proj=geocent")
+cc = rbind(geoc[[1]], NA, geoc[[2]], NA, geoc[[3]])
+from3d = function(x, offset, maxz, minz) {
+	x = x[,c(2,3,1)] + offset # move to y right, x up, z backw
+	x[,2] = x[,2] - maxz      # shift y to left
+	d = maxz
+	z = x[,3] - minz + offset
+	x[,1] = x[,1] * (d/z)
+	x[,2] = x[,2] * (d/z)
+	x[,1:2]
+}
+maxz = max(cc[,3], na.rm = TRUE)
+minz = min(cc[,3], na.rm = TRUE)
+offset = 3e7
+circ = from3d(cc, offset, maxz, minz)
+mx = max(cc, na.rm = TRUE) * 1.1
+x = rbind(c(0, 0, 0), c(mx, 0, 0))
+y = rbind(c(0, 0, 0), c(0, mx, 0))
+z = rbind(c(0, 0, 0), c(0, 0, mx))
+ll = rbind(x, NA, y, NA, z)
+l0 =  from3d(ll, offset, maxz, minz)
+mx = max(cc, na.rm = TRUE) * 1.2
+x = rbind(c(0, 0, 0), c(mx, 0, 0))
+y = rbind(c(0, 0, 0), c(0, mx, 0))
+z = rbind(c(0, 0, 0), c(0, 0, mx))
+ll = rbind(x, NA, y, NA, z)
+l =  from3d(ll, offset, maxz, minz)
+
+par(mfrow = c(1, 2))
+par(mar=rep(c(0,0,1,0)))
+plot.new()
+plot.window(xlim = c(min(circ[,1],na.rm = TRUE), 3607103*1.02),
+						ylim = c(min(circ[,2],na.rm = TRUE), 2873898*1.1), asp = 1)
+lines(circ)
+lines(l0)
+text(l[c(2,5,8),], labels = c("x", "y", "z"), col = 'red')
+# add POINT(60 47)
+p = st_as_sfc("POINT(60 47)", crs = 4326) %>% st_transform("+proj=geocent")
+p = p[[1]]
+pts = rbind(c(0,0,0), c(p[1],0,0), c(p[1],p[2],0), c(p[1],p[2],p[2]))
+ptsl =  from3d(pts, offset, maxz, minz)
+lines(ptsl, col = 'blue', lty = 2, lwd = 2)
+points(ptsl[4,1], ptsl[4,2], col = 'blue', cex = 1, pch = 16)
+title("geocentric coordinates")
+
+plot.new()
+plot.window(xlim = c(min(circ[,1],na.rm = TRUE), 3607103*1.02),
+						ylim = c(min(circ[,2],na.rm = TRUE), 2873898*1.1), asp = 1)
+lines(circ)
+title("geographic coordinates")
+
+p = st_as_sfc("POINT(60 47)", crs = 4326) %>% st_transform("+proj=geocent")
+p = p[[1]]
+pts = rbind(c(0,0,0), c(p[1],p[2],p[3]))
+pt =  from3d(pts, offset, maxz, minz)
+lines(pt)
+points(pt[2,1], pt[2,2], col = 'blue', cex = 1, pch = 16)
+
+p0 = st_as_sfc("POINT(60 0)", crs = 4326) %>% st_transform("+proj=geocent")
+p0 = p0[[1]]
+pts = rbind(c(0,0,0), c(p0[1],p0[2],p0[3]))
+pt =  from3d(pts, offset, maxz, minz)
+lines(pt)
+
+p0 = st_as_sfc("POINT(0 0)", crs = 4326) %>% st_transform("+proj=geocent")
+p0 = p0[[1]]
+pts = rbind(c(0,0,0), c(p0[1],p0[2],p0[3]))
+pt =  from3d(pts, offset, maxz, minz)
+lines(pt)
+
+p0 = st_as_sfc("POINT(0 90)", crs = 4326) %>% st_transform("+proj=geocent")
+p0 = p0[[1]]
+pts = rbind(c(0,0,0), c(p0[1],p0[2],p0[3]))
+pt =  from3d(pts, offset, maxz, minz)
+lines(pt, lty = 2)
+
+p0 = st_as_sfc("POINT(90 0)", crs = 4326) %>% st_transform("+proj=geocent")
+p0 = p0[[1]]
+pts = rbind(c(0,0,0), c(p0[1],p0[2],p0[3]))
+pt =  from3d(pts, offset, maxz, minz)
+lines(pt, lty = 2)
+
+f1 = rbind(cbind(0:60, 0))
+arc = st_sfc(st_linestring(f1), crs=4326)
+geoc = st_transform(arc, "+proj=geocent")
+cc = rbind(geoc[[1]])
+circ = from3d(cc, offset, maxz, minz)
+lines(circ, col = 'red', lwd = 2, lty = 2)
+
+f1 = rbind(cbind(60, 0:47))
+arc = st_sfc(st_linestring(f1), crs=4326)
+geoc = st_transform(arc, "+proj=geocent")
+cc = rbind(geoc[[1]])
+circ = from3d(cc, offset, maxz, minz)
+lines(circ, col = 'blue', lwd = 2, lty = 2)
+
+text(pt[1,1]+100000, pt[1,2]+50000, labels = expression(phi), col = 'blue') # lat
+text(pt[1,1]+20000, pt[1,2]-50000, labels = expression(lambda), col = 'red') # lng
+```
+
+------
+
+Geometric operations include measures (area, length, ...), predicates (intersects, covers,...) and transformations (intersection, union, ...)
+
+Geometrical operations on projected or geocentric coordinates can be done using Euclidean geometry, where all lines are straight.
+
+Spherical (or ellipsoidal) geometry computes distances, direction, areas etc. over the surface of the sphere (ellipsoid); lines connecting points are great circle arcs.
 
 ## Why is this worth talking about?
 
-- I believe that applying Eucledian geometry to geographical coordinates is the number one most common error made in spatial data science (closely followed by ignoring the support of data).
+- I believe that applying Euclidian geometry to geographical coordinates is the number one most common error made in spatial data science (closely followed by ignoring the support of data).
 
-- technological advances have made spherical geometry a good option, but inertia in legacy GIS and data science languages have slowed down its adoption / uptake
+- technological advances have made spherical geometry a good option, but inertia in legacy GIS, OGC, and data science software have slowed down its adoption / uptake
 
-- We have gotten used to Plate Carree, and are OK with it.
+- We have gotten used to Plate Carree, and modified our datasets accordingly.
 
-- Even GeoJSON has written down that the world is 2D.
+- Even GeoJSON has written down that the world is 2D -- Clause 3.1.9. Antimeridian Cutting:
+
+    * In representing Features that cross the antimeridian, interoperability is improved by modifying their geometry.  Any geometry that crosses the antimeridian SHOULD be represented by     cutting it in two such that neither part's representation crosses the antimeridian. 
 
 ------------
 
@@ -77,7 +218,6 @@ Consider, for a moment, the difference between:
 **Equirectangular projection**: where meridians and parallels form equal rectangles (left; shape preserving at center), not squares (right: nowhere true)
 
 ```{r world, echo=FALSE, fig.height=6}
-suppressPackageStartupMessages(library(sf))
 suppressPackageStartupMessages(library(sp))
 data(air, package = "spacetime")
 DE <- st_as_sf(DE_NUTS1)
@@ -96,19 +236,21 @@ plot(st_geometry(DE), graticule=TRUE,axes=TRUE,asp=1,main="plate carree")
     * https://geographiclib.sourceforge.io/ 
 	* ellipsoidal, Taylor expansions exact up to 8-byte doubles
 	* part of Proj.4, now PROJ
-* PostGIS (liblwgeom)'s "geograpy" type
+* PostGIS (liblwgeom)'s "geography" type
     * [funded by palantir](http://blog.cleverelephant.ca/2017/12/postgis-fund-me.html)
 	* [feature list](https://postgis.net/workshops/postgis-intro/geography.html), 
-	* but:  "_The buffer and intersection functions are actually wrappers on top of a cast to geometry, and are not carried out natively in spherical coordinates. As a result, they may fail to return correct results for objects with very large extents that cannot be cleanly converted to a planar representation._"
+	* cheats:  "_The buffer and intersection functions are actually wrappers on top of a cast to geometry, and are not carried out natively in spherical coordinates. As a result, they may fail to return correct results for objects with very large extents that cannot be cleanly converted to a planar representation._"
 
 --------
-
-* Google's s2geometry
-* H3: Uber’s Hexagonal Hierarchical Spatial Index
 
 * R package `geosphere` providing distance, bearing, etc, and several alternative measures
 * R packages `sp`, `gstat`, `spdep` using geodetic distances in case of geographic coordinates
 * R package `lwgeom` interfacing parts of `liblwgeom`
+
+Modern solutions, open source libraries:
+
+* Google's [s2geometry](https://s2geometry.io) (C++, Java, Go, Python)
+* [H3](https://eng.uber.com/h3/): Uber’s Hexagonal Hierarchical Spatial Index
 
 ## The situation with `sf` and `stars`
 
@@ -129,10 +271,10 @@ $\Rightarrow$ measures are computed over the sphere/ellipsoid
 -------
 
 ```{r}
-a <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
+a <- st_as_sfc("POINT(7 53)", crs = "EPSG:4326") %>% 
 	st_buffer(set_units(1, degree)) %>%
 	st_transform("EPSG:25832") # UTM zone 32 N
-b <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
+b <- st_as_sfc("POINT(7 53)", crs = "EPSG:4326") %>% 
 	st_transform("EPSG:25832") %>% # UTM zone 32 N
 	st_buffer(set_units(111, km))
 ```
@@ -166,8 +308,9 @@ $\Rightarrow$ nonsense coordinates may come out
 ## How is spherical geometry different?
 
 * in contrast to the plane $R^2$, the sphere ($S^2$) is bounded
-* where in $R^2$ polygons have an unambiguous _inside_, on $S^2$ polygons divide the sphere's surface in two parts.
-* the _inside_ can then e.g. be associated with ring direction (e.g. left of the boundary, when traversing the ring, is inside), and flips if the ring directions are reversed
+* space continues over the antimeridian, poles are points
+* in linestrings and polygons, points are connected by great circle arcs, not straight lines
+* where in $R^2$ polygons have an unambiguous _inside_, on $S^2$ polygons divide the sphere's surface in two parts $\Rightarrow$ ring direction disambiguates
 * the _empty polygon_ has a complement: the _full polygon_.
 * two new bounding structures:
     * bounding cap: smalles circumfering circle (center point + radius)
@@ -206,12 +349,28 @@ and _Web Mercator_.
 <img src="s2curve-small.gif" alt="drawing"/> 
 https://s2geometry.io/devguide/s2cell_hierarchy.html
 
+## `sf` package with using `s2`
+
+* through R package `s2`, `sf` uses all `s2geometry` measures /
+predicates / transformations (\*)
+
+```{r}
+sf_use_s2(TRUE) # this will become default, but when?
+a <- st_as_sfc("POINT(7 53)", crs = "EPSG:4326") %>% 
+	st_buffer(set_units(1, degree))
+```
+
+$\Rightarrow$ no more long/lat warning!
+
+(\*) with some exceptions: `st_relate`, `st_buffer` approximates, ...
+
+
 ## Examples
 
 ```{r}
 sf_use_s2(TRUE)
 a <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
-	st_buffer(set_units(1, degree)) %>%
+	st_buffer(set_units(1, degree)) %>% # No more warnings!
 	st_transform("EPSG:25832") # UTM zone 32 N
 b <- st_as_sfc("POINT(7 52)", crs = "EPSG:4326") %>% 
 	st_buffer(set_units(1, degree), max_cells = 300) %>%
@@ -245,7 +404,7 @@ plot(c, col = 'orange', add = TRUE)
 
 ## Outlook
 
-* run reverse dependency checks on all (300) reverse dependencies
+* run reverse dependency checks on all (300+) reverse dependencies, and theirs...
 * document best practices (`st_is_within_distance` rather than `st_buffer`)
 * explain the issue: the world is round.
 
@@ -262,3 +421,7 @@ https://cran.r-project.org/web/packages/geosphere/vignettes/geosphere.pdf
 
 * E Pebesma, D Dunnington, Spherical geometry in sf using s2geometry,
 https://r-spatial.github.io/sf/articles/sf7.html
+
+* Edzer Pebesma, Dewey Dunnington, In r-spatial,
+the Earth is no longer flat. [r-spatial blog, Jun 17,
+2020](https://www.r-spatial.org/r/2020/06/17/s2.html).
