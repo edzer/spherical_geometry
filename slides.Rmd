@@ -163,11 +163,15 @@ text(pt[1,1]+20000, pt[1,2]-50000, labels = expression(lambda), col = 'red') # l
 
 ------
 
-Geometric operations include measures (area, length, ...), predicates (intersects, covers,...) and transformations (intersection, union, ...)
+Geometric operations include computation of 
+
+* **measures** (area, length/distance, direction, ...), 
+* **predicates** (intersects, covers, contains, touches, ...) and 
+* **transformations** (intersection, union, difference, symmetric difference, buffer)
 
 Geometrical operations on projected or geocentric coordinates can be done using Euclidean geometry, where all lines are straight.
 
-Spherical (or ellipsoidal) geometry computes distances, direction, areas etc. over the surface of the sphere (ellipsoid); lines connecting points are great circle arcs.
+Spherical (or ellipsoidal) geometry operations are computed over the surface of the sphere (ellipsoid); lines connecting points are great circle arcs.
 
 ## Why is this worth talking about?
 
@@ -236,7 +240,7 @@ plot(st_geometry(DE), graticule=TRUE,axes=TRUE,asp=1,main="plate carree")
     * https://geographiclib.sourceforge.io/ 
 	* ellipsoidal, Taylor expansions exact up to 8-byte doubles
 	* part of Proj.4, now PROJ
-* PostGIS (liblwgeom)'s "geography" type
+* PostGIS (liblwgeom)'s `geography` type
     * [funded by palantir](http://blog.cleverelephant.ca/2017/12/postgis-fund-me.html)
 	* [feature list](https://postgis.net/workshops/postgis-intro/geography.html), 
 	* cheats:  "_The buffer and intersection functions are actually wrappers on top of a cast to geometry, and are not carried out natively in spherical coordinates. As a result, they may fail to return correct results for objects with very large extents that cannot be cleanly converted to a planar representation._"
@@ -425,3 +429,5 @@ https://r-spatial.github.io/sf/articles/sf7.html
 * Edzer Pebesma, Dewey Dunnington, In r-spatial,
 the Earth is no longer flat. [r-spatial blog, Jun 17,
 2020](https://www.r-spatial.org/r/2020/06/17/s2.html).
+
+* Rmd of these slides: https://github.com/edzer/spherical_geometry/
