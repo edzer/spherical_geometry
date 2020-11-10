@@ -408,8 +408,10 @@ plot(c, col = 'orange', add = TRUE)
 
 ## Outlook
 
-* run reverse dependency checks on all (300+) reverse dependencies, and theirs...
+* `sf` with `s2` switched on: still need to start reverse dependency checks on all (300+) reverse dependencies, recursively ...
 * document best practices (`st_is_within_distance` rather than `st_buffer`)
+* check robustness against invalid geometries valid on "plate carree" 
+* replacing `GEOS` with `s2geometry` for geographic coordinates solves some problems, and introduces some new ones
 * explain the issue: the world is round.
 
 -------------
