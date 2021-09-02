@@ -1,7 +1,7 @@
 ---
 title: "Spherical Geometry"
 author: "Edzer Pebesma"
-date: "GI Forum, Nov 10, 2020"
+date: "OpenGeoHub summer school, Sep 1-3 2021"
 logo: "scratch/animation.gif"
 output:
   ioslides_presentation:
@@ -181,7 +181,7 @@ Spherical (or ellipsoidal) geometry operations are computed over the surface of 
 
 - We have gotten used to Plate Carree, and modified our datasets accordingly.
 
-- Even GeoJSON has written down that the world is 2D -- Clause 3.1.9. Antimeridian Cutting:
+- Even GeoJSON has written down that the world is 2D -- [Clause 3.1.9. Antimeridian Cutting](https://datatracker.ietf.org/doc/html/rfc7946#section-3.1.9):
 
     * In representing Features that cross the antimeridian, interoperability is improved by modifying their geometry.  Any geometry that crosses the antimeridian SHOULD be represented by     cutting it in two such that neither part's representation crosses the antimeridian. 
 
@@ -275,6 +275,7 @@ $\Rightarrow$ measures are computed over the sphere/ellipsoid
 -------
 
 ```{r}
+sf_use_s2(FALSE)
 a <- st_as_sfc("POINT(7 53)", crs = "EPSG:4326") %>% 
 	st_buffer(set_units(1, degree)) %>%
 	st_transform("EPSG:25832") # UTM zone 32 N
@@ -296,8 +297,6 @@ plot(st_geometry(DE_UTM), graticule=TRUE, main = "b: correct buffer in UTM")
 plot(b, col = 'orange', add = TRUE)
 ```
 
-$\Rightarrow$ proper buffering needs round-trip through a projection
-
 --------
 
 ```{r}
@@ -308,6 +307,8 @@ st_as_sfc("POINT(0 89)", crs = "EPSG:4326") %>%
 
 $\Rightarrow$ nonsense coordinates may come out
 
+(you could get proper buffering by round-tripping through a
+projection; this is what PostGIS does)
 
 ## How is spherical geometry different?
 
@@ -359,7 +360,7 @@ https://s2geometry.io/devguide/s2cell_hierarchy.html
 predicates / transformations (\*)
 
 ```{r}
-sf_use_s2(TRUE) # this will become default, but when?
+sf_use_s2(TRUE) # default since sf 1.0-0, released June 9, 2021
 a <- st_as_sfc("POINT(7 53)", crs = "EPSG:4326") %>% 
 	st_buffer(set_units(1, degree))
 ```
@@ -392,7 +393,7 @@ $\Rightarrow$ no longer raise a warning
 ```{r echo=FALSE,fig.width=10,fig.height=4}
 par(mfrow = c(1, 3))
 DE_UTM = st_transform(DE, "EPSG:25832")
-plot(st_geometry(DE_UTM), graticule=TRUE, main = "buffer in LNG/LAT, 1000 cells")
+plot(st_geometry(DE_UTM), graticule=TRUE, main = "buffer in LNG/LAT, 1000 cells (default)")
 plot(a, col = 'orange', add = TRUE)
 plot(st_geometry(DE_UTM), graticule=TRUE, main = "buffer in LNG/LAT, 400 cells")
 plot(b, col = 'orange', add = TRUE)
@@ -408,11 +409,12 @@ plot(c, col = 'orange', add = TRUE)
 
 ## Outlook
 
-* `sf` with `s2` switched on: still need to start reverse dependency checks on all (300+) reverse dependencies, recursively ...
-* document best practices (`st_is_within_distance` rather than `st_buffer`)
-* check robustness against invalid geometries valid on "plate carree" 
-* replacing `GEOS` with `s2geometry` for geographic coordinates solves some problems, and introduces some new ones
-* explain the issue: the world is round.
+* `sf` with `s2` switched on: the default since June 2021.
+* `sf_use_s2()` queries, and can switch back and forth
+* best practices: use `st_is_within_distance` not `st_buffer`
+* many valid geometries on "plate carree" are hard to make valid on S2
+* replacing `GEOS` with `s2geometry` for geographic coordinates solves some problems, and introduces new ones: see [sf issues on github](https://github.com/r-spatial/sf/issues)
+* Mission: the world is round. GIS was wrong all the time.
 
 -------------
 ### References
